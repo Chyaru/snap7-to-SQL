@@ -7,7 +7,7 @@ My program is capable of store cycle data from a dryer controlled by a S71200 PL
 
 For compile the program the command is: 
 ```
-g++ main.cpp snap7.cpp -o main -lsnapy -lmysqlcppconn
+g++ main.cpp snap7.cpp -o main -lsnap7 -lmysqlcppconn
 ```
 
 make sure you have compiled the libsnap.so

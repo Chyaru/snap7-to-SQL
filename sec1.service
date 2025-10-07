@@ -1,0 +1,13 @@
+[Unit]
+Description = Servicio de lectura de los ciclos de la secadora no. 1
+After = network.target
+
+[Service]
+User = vboxuser
+WorkingDirectory = /home/vboxuser/servidorp1/
+ExecStart = /home/vboxuser/servidorp1/main
+Restart = Always
+StandardOutput = journal
+
+[Install]
+WantedBy = multi-user.target

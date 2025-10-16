@@ -1,0 +1,47 @@
+#include <iostream>
+#include <mariadb/mysql.h>
+#include <string>
+
+using namespace std;
+
+int main() {
+    MYSQL *conn;
+    MYSQL_RES *res;
+    MYSQL_ROW row;
+
+    // Datos de conexión
+    const char* server = "192.168.1.10";   // tu IP o localhost
+    const char* user = "usuario";
+    const char* password = "clave";
+    const char* database = "basedatos";
+
+    // Inicializa el manejador
+    conn = mysql_init(NULL);
+
+    if (conn == NULL) {
+        cerr << "mysql_init() failed\n";
+        return 1;
+    }
+
+    // Conecta
+    if (!mysql_real_connect(conn, server, user, password, database, 3306, NULL, 0)) {
+        cerr << "Error al conectar: " << mysql_error(conn) << endl;
+        mysql_close(conn);
+        return 1;
+    }
+
+    cout << "Conexión exitosa a MariaDB\n";
+
+    // Ejemplo de comando UPDATE o INSERT
+    string query = "INSERT INTO tickets (num_equipo, usuario) VALUES (1, 'juan')";
+
+    if (mysql_query(conn, query.c_str())) {
+        cerr << "Error en query: " << mysql_error(conn) << endl;
+    } else {
+        cout << "Query ejecutada correctamente, filas afectadas: " 
+             << mysql_affected_rows(conn) << endl;
+    }
+
+    mysql_close(conn);
+    return 0;
+}

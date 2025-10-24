@@ -1,0 +1,249 @@
+#include "snap7.h"
+#include <mariadb/mysql.h>
+
+#include <iostream>
+#include <queue>
+#include <string.h>
+
+#include <thread>
+#include <chrono>
+using namespace std;
+
+ const int N = 9;
+string columnas[N] = {
+    "num_ticket",        // 0
+    "num_equipo",        // 1
+    "usuario",           // 2
+    "tiempo_ciclo",      // 3 
+    "temp_elegida",      // 4
+    "hora_inicio",       // 5
+    "hora_fin", // 6
+    "gas_abierto", // 7   
+    "natural_cancelado", // 8
+};
+
+// i -> int
+// s -> string 
+// ...
+char tipo_de_valor[N] = {
+    'i',
+    'i',
+    's',
+    'i',
+    'i',
+    'd',
+    'd',
+    'i',
+    'i'
+};
+int offset[N+1]={
+    0, 4, 6, 262, 264, 266, 278, 290, 294, 296
+};
+
+int valoresInt[N];
+
+string valoresString[N];
+
+
+
+bool subir(){
+  //  try {
+        MYSQL *con;
+        MYSQL_STMT *st;
+        MYSQL_BIND paquete[N];  
+
+        const char* server = "x.x.x.x";
+        const char* user = "x";
+        const char* password = "x";
+        const char* database = "x";
+
+        con = mysql_init(NULL);
+        if (!con) {
+            return 0;
+        }
+
+        if (!mysql_real_connect(con, server, user, password, database, 3306, NULL, 0)) {
+            mysql_close(con);
+            return 0;
+        }
+
+        cout<<"\033[95m" << "Conexion a SQL...\n"<<"\033[0m";
+
+        //const char* 
+        string s = "INSERT IGNORE INTO x(";
+        for(int i = 0; i < N ; i++){
+            s += columnas[i]; 
+            s += (i+1 < N ? ", " : ")");
+        }
+        s+= " VALUES (";
+        for(int i = 0; i < N ; i++){
+            s += '?';
+            s += (i+1 < N ? ", " : ")");
+        }
+        st = mysql_stmt_init(con);
+
+        if (!st) {
+            mysql_close(con);
+            return 0;
+        }
+
+		const char *S = s.c_str();
+        if (mysql_stmt_prepare(st, S, strlen(S))) {
+            mysql_stmt_close(st);
+            mysql_close(con);
+            return 0;
+        }
+
+        memset(paquete, 0, sizeof(paquete));
+
+        for(int i = 0; i < N; i++){
+            if(tipo_de_valor[i]=='i'){
+                paquete[i].buffer_type = MYSQL_TYPE_LONG;
+                paquete[i].buffer =(char *)&valoresInt[i];
+             //   paquete[i].is_null = 0;
+             //   paquete[i].length = 0;
+            }else{
+                paquete[i].buffer_type = MYSQL_TYPE_STRING;
+                unsigned long int tam = valoresString[i].size();
+                
+				cout<<"\033[95m" << (char *)valoresString[i].c_str() <<"\n"<<"\033[0m";
+                paquete[i].buffer = (char *)valoresString[i].c_str();
+                paquete[i].buffer_length = valoresString[i].size();
+                  //paquete[i].is_null = 0;
+                paquete[i].length =&tam;
+
+            }
+        }
+        if (mysql_stmt_bind_param(st, paquete)) {
+            mysql_stmt_close(st);
+            mysql_close(con);
+            return 0;
+        }
+        cout<<"\033[92m" <<"Enviando Instruccion:\n"<< "\033[0m" << s <<"\n";
+        if (mysql_stmt_execute(st)) {
+			cout << "\033[31m" << mysql_stmt_error(st) << "\033[0m" << "\n";
+            return 0;
+        }
+        cout<<"\033[32m" <<"Exito, subido al servidor\n"<< "\033[0m" << s <<"\n";
+        mysql_stmt_close(st);
+        mysql_close(con);
+        return 1;
+
+ //   } catch (sql::SQLException &e) {
+ //       cout << "\033[31m" << e.what() << "\033[0m" << "\n";
+ //       return 0;
+  //  }
+
+}
+
+const int M = 296;
+char buffer[M];
+char lstbuffer[M];
+queue<vector<char>> cola_de_instrucciones;
+
+void convertir(){
+    for(int i = 0; i < M; i++) buffer[i] = cola_de_instrucciones.front().at(i);
+    valoresString[2] = "";
+    // usuario,la posicion 7 tiene el tamano de la cadena
+    for(int i = 0; i < buffer[7]; i++){
+        valoresString[2] += buffer[i+8];
+    }
+    for(int i = 0; i < N; i++){
+        if(tipo_de_valor[i]=='i'){
+            int &x = valoresInt[i];
+            x = 0;
+            for(int j = offset[i+1]-1, c = 0; j >= offset[i]; j--, c+=8){
+                x += buffer[j]<<c;
+            }
+         //   cout<<x<<" ";
+        }else if(tipo_de_valor[i] == 'd'){
+            string &s = valoresString[i];
+            s = "";
+            int j = offset[i];
+            int y = (buffer[j+1] + buffer[j] * 256);
+            s+=y/1000 + '0';
+            s+=(y%1000)/100 + '0';
+            s += (y%100)/10 + '0';
+            s += y%10 + '0';
+            s += '-';
+            y = buffer[j+2];
+            s += y/10 + '0';
+            s += y%10 + '0';
+            s += '-';
+            y = buffer[j+3];
+            s += y/10 + '0';
+            s += y%10 + '0';
+            s += ' ';
+
+            y = buffer[j+5];
+            s += y/10 + '0';
+            s += y%10 + '0';
+            s += ':';
+            y = buffer[j+6];
+            s += y/10 + '0';
+            s += y%10 + '0';
+            s += ':';
+            y = buffer[j+7];
+            s += y/10 + '0';
+            s += y%10 + '0';
+
+			//s += "\0";
+            //cout<<s<<" ";
+        }
+    }
+    return;
+}
+
+
+bool diferentes(){
+    for(int i = 0; i < M; i++){
+        if(buffer[i]!=lstbuffer[i]) 
+            return true;
+    }
+    return false;
+}
+int main(int argc, char* argv[]){
+
+    vector<char> aux(M,0);
+
+    TS7Client Client;
+    cout<< "\033[94m"<<"Hola, Inicializando...\n" << "\033[0m";
+
+    int sz = sizeof(buffer);
+
+    while(true){
+        int cod_s = Client.ConnectTo("x.x.x.x",x,x);
+        if(cod_s != 0) {
+            cout<<"\033[31m" <<"Error conectando al PLC\n" << "\033[0m"; 
+        }else{
+            cod_s = Client.DBRead(x,0x0, sz, buffer);
+            if(cod_s != 0){
+                cout<< "\033[31m" <<"Error DB\n" << "\033[0m";
+                break;
+            }
+     //       cout<<"conectado con exito\n";
+    /*        if(diferentes()){
+                for(int i  = 0; i < M; i++){
+                    cout<<(int)buffer[i]<<" ";
+                }
+                cout<<"\n";
+            }*/
+            if((buffer[294]|buffer[295]) > 0 &&  diferentes()){
+                for(int i = 0; i < M; i++) aux[i] =lstbuffer[i]= buffer[i];
+                cola_de_instrucciones.push(aux);
+                cout<<"\033[95m" << "Ciclo recibido, guardando ...\n"<<"\033[0m";
+            }
+        }
+        while(cola_de_instrucciones.size()){
+            convertir();
+            if(subir()==0) { cout<< "\033[31m" <<"Error SQL\n" << "\033[0m"; break; }
+            cola_de_instrucciones.pop();
+        }
+        this_thread::sleep_for(chrono::milliseconds(500));
+    }
+
+//    delete Client;
+
+    return 0; 
+
+}
